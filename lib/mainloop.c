@@ -155,13 +155,13 @@ ThreadId main_thread_handle;
  ************************************************************************************/
 
 /* the old configuration that is being reloaded */
-static GlobalConfig *main_loop_old_config;
+GlobalConfig *main_loop_old_config;
 /* the pending configuration we wish to switch to */
-static GlobalConfig *main_loop_new_config;
+GlobalConfig *main_loop_new_config;
 
 
 /* called when syslog-ng first starts up */
-static gboolean
+gboolean
 main_loop_initialize_state(GlobalConfig *cfg, const gchar *persist_filename)
 {
   gboolean success;
@@ -181,7 +181,7 @@ main_loop_initialize_state(GlobalConfig *cfg, const gchar *persist_filename)
 }
 
 /* called to apply the new configuration once all I/O worker threads have finished */
-static void
+void
 main_loop_reload_config_apply(void)
 {
   if (main_loop_is_terminating())
