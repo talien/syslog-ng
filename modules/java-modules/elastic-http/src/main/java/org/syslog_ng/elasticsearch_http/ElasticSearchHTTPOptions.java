@@ -40,10 +40,17 @@ public class ElasticSearchHTTPOptions {
 	public static String FLUSH_LIMIT = "flush_limit";
 	public static String CONFIG_FILE = "resource";
 	public static String CONCURRENT_REQUESTS = "concurrent_requests";
+    public static String CLIENT_MODE = "client_mode";
 
 	public static String CLUSTER_URL_DEFAULT = "http://localhost:9200";
 	public static String MESSAGE_TEMPLATE_DEFAULT = "$(format-json --scope rfc5424 --exclude DATE --key ISODATE)";
 	public static String FLUSH_LIMIT_DEFAULT = "5000";
+    public static String CLIENT_MODE_HTTP = "http";
+    public static String CLIENT_MODE_AWS = "aws";
+    public static HashSet<String> CLIENT_MODES  = new HashSet<String>(Arrays.asList(CLIENT_MODE_HTTP, CLIENT_MODE_AWS));
+
+    public static String CLIENT_MODE_DEFAULT = CLIENT_MODE_HTTP;
+
 
 	public static String CONCURRENT_REQUESTS_DEFAULT = "1";
 
@@ -92,6 +99,10 @@ public class ElasticSearchHTTPOptions {
 		return options.get(CLUSTER).getValue();
 	}
 
+    public String getClientMode() {
+        return options.get(CLIENT_MODE).getValue();
+    }
+
 	public int getFlushLimit() {
 		return options.get(FLUSH_LIMIT).getValueAsInteger();
 	}
@@ -121,6 +132,7 @@ public class ElasticSearchHTTPOptions {
 		options.put(new StringOption(owner, CLUSTER_URL, CLUSTER_URL_DEFAULT));
 		options.put(new IntegerRangeCheckOptionDecorator(new StringOption(owner, FLUSH_LIMIT, FLUSH_LIMIT_DEFAULT), -1, Integer.MAX_VALUE));
 		options.put(new StringOption(owner, CONFIG_FILE));
+        options.put(new EnumOptionDecorator(new StringOption(owner, CLIENT_MODE, CLIENT_MODE_DEFAULT), CLIENT_MODES));
 		options.put(new IntegerRangeCheckOptionDecorator(new StringOption(owner, CONCURRENT_REQUESTS, CONCURRENT_REQUESTS_DEFAULT), 0, Integer.MAX_VALUE));
 	}
 }

@@ -28,6 +28,8 @@ import org.syslog_ng.LogMessage;
 import org.syslog_ng.LogTemplate;
 import org.syslog_ng.StructuredLogDestination;
 import org.syslog_ng.elasticsearch_http.ElasticSearchHTTPOptions;
+import org.syslog_ng.elasticsearch_http.awssigner.AWSSigner;
+import org.syslog_ng.elasticsearch_http.awssigner.AWSSigningRequestInterceptor;
 import org.syslog_ng.options.InvalidOptionException;
 import org.syslog_ng.logging.SyslogNgInternalLogger;
 import org.apache.log4j.Logger;
@@ -41,6 +43,13 @@ import org.syslog_ng.elasticsearch_http.messageprocessor.ESHTTPSingleMessageProc
 import org.syslog_ng.elasticsearch_http.messageprocessor.ESHTTPBulkMessageProcessor;
 import org.syslog_ng.elasticsearch_http.messageprocessor.ESHTTPMessageProcessor;
 
+import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
+import com.amazonaws.auth.AWSCredentialsProvider;
+
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.impl.nio.client.HttpAsyncClientBuilder;
+
+import org.joda.time.LocalDateTime;
 
 import java.util.Set;
 import java.util.LinkedHashSet;
@@ -48,6 +57,14 @@ import java.util.LinkedHashSet;
 import java.io.IOException;
 
 public class ElasticSearchHTTPDestination extends StructuredLogDestination {
+
+    private class CurrentTimeProvider implements AWSSigner.CurrentTimeProvider {
+        public LocalDateTime getTime()
+        {
+            //return LocalDateTime.of(2011, 9, 9, 23, 36, 0);
+            return LocalDateTime.now();
+        }
+    }
 
 	JestClient client;
 	ElasticSearchHTTPOptions options;
@@ -69,25 +86,59 @@ public class ElasticSearchHTTPDestination extends StructuredLogDestination {
 			return new ESHTTPSingleMessageProcessor(options, client);
 	}
 
+    private JestClientFactory createAWSClient()
+    {
+        final AWSCredentialsProvider awsCredentialsProvider = new DefaultAWSCredentialsProviderChain();
+        final AWSSigner awsSigner = new AWSSigner(awsCredentialsProvider, "us-east-1", "es", new CurrentTimeProvider());
+        final AWSSigningRequestInterceptor requestInterceptor = new AWSSigningRequestInterceptor(awsSigner);
+        final JestClientFactory factory = new JestClientFactory() {
+            @Override
+            protected HttpClientBuilder configureHttpClient(HttpClientBuilder builder) {
+                builder.addInterceptorLast(requestInterceptor);
+                return builder;
+            }
+            @Override
+            protected HttpAsyncClientBuilder configureHttpClient(HttpAsyncClientBuilder builder) {
+                builder.addInterceptorLast(requestInterceptor);
+                return builder;
+            }
+        };
+        logger.debug("Building AWS Jest client");
+        return factory;   
+    }
+
+    private JestClient createClient() {
+            JestClient result;
+            JestClientFactory clientFactory;
+			String connectionUrl = options.getClusterUrl();
+            logger.debug("Creating JestClient, client_mode=" + options.getClientMode());
+            if (options.getClientMode().equals(ElasticSearchHTTPOptions.CLIENT_MODE_AWS)) { 
+                clientFactory = createAWSClient();
+            } else {
+			    clientFactory = new JestClientFactory(); 
+            }
+			clientFactory.setHttpClientConfig(new HttpClientConfig
+			       .Builder(connectionUrl)
+			       .multiThreaded(false)
+			       .build());
+			result = clientFactory.getObject();
+            return result;
+
+    }
+
 	@Override
 	protected boolean init() {
 		boolean result = false;
 		logger.debug("Initializing ESHTTP Destination");
 		try {
 			options.init();
-			String connectionUrl = options.getClusterUrl();
-			JestClientFactory clientFactory = new JestClientFactory();
-			clientFactory.setHttpClientConfig(new HttpClientConfig
-			       .Builder(connectionUrl)
-			       .multiThreaded(false)
-			       .build());
-			client = clientFactory.getObject();
+            client = createClient();
 			messageProcessor = createMessageProcessor();
 			messageProcessor.init();
 			getClusterName();
 			result = true;
 		}
-		catch (Exception | Error e){
+		catch (Throwable e){
 			logger.error(e.getMessage());
 			logger.error(e.getClass().getName());
 			return false;
